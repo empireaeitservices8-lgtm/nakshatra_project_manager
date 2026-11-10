@@ -1,32 +1,375 @@
 import 'package:flutter/material.dart';
-import 'dart:math';
-import 'models.dart';
+import 'package:provider/provider.dart';
+
 import 'app_state.dart';
-import 'app_state.dart' show NGColors;
 import 'card_detail_sheet.dart';
+import 'models/models.dart';
+import 'viewmodels/viewmodels.dart';
 
 // ────────────────────────────────────────────────────────────────────────────
-//  BOARD SCREEN
+//  BOARD SCREEN — Connected to BoardViewModel & TaskViewModel
 // ────────────────────────────────────────────────────────────────────────────
 class BoardScreen extends StatefulWidget {
-  final KanbanBoard board;
+  final BoardModel boardModel;
   final AppState state;
 
-  const BoardScreen({super.key, required this.board, required this.state});
+  const BoardScreen({
+    super.key,
+    required this.boardModel,
+    required this.state,
+  });
 
   @override
   State<BoardScreen> createState() => _BoardScreenState();
 }
 
 class _BoardScreenState extends State<BoardScreen> {
-  String _uid() =>
-      '${DateTime.now().millisecondsSinceEpoch}${Random().nextInt(9999)}';
+  Color _resolveColor() {
+    if (widget.boardModel.color != null && widget.boardModel.color != 0) {
+      return Color(widget.boardModel.color!);
+    }
+    if (widget.boardModel.colour != null && widget.boardModel.colour!.isNotEmpty) {
+      try {
+        final hex = widget.boardModel.colour!.replaceAll('#', '');
+        return Color(int.parse('FF$hex', radix: 16));
+      } catch (_) {}
+    }
+    return NGColors.gold;
+  }
 
-  KanbanBoard get board => widget.board;
-  AppState get state => widget.state;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<BoardViewModel>().fetchBoardDetails(widget.boardModel.id);
+    });
+  }
+
+  // ─── Filter Tasks by Tag Dialog ────────────────────────────────────────────
+  void _showTagFilterDialog(BuildContext context) {
+    final boardVm = context.read<BoardViewModel>();
+    final tags = ['Design', 'Marketing', 'Procurement', 'Compliance', 'Complete', 'Urgent'];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF141414),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Filter by Tag',
+                      style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  if (boardVm.activeTagFilter != null)
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        boardVm.filterByTag(widget.boardModel.id, '');
+                      },
+                      child: const Text('Clear', style: TextStyle(color: NGColors.ruby)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: tags.map((t) {
+                  final isSelected = boardVm.activeTagFilter == t;
+                  return ChoiceChip(
+                    label: Text(t),
+                    selected: isSelected,
+                    selectedColor: NGColors.gold,
+                    backgroundColor: const Color(0xFF242424),
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.black : Colors.white70,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                    onSelected: (selected) {
+                      Navigator.pop(ctx);
+                      boardVm.filterByTag(widget.boardModel.id, selected ? t : '');
+                    },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ─── 3-Dot Menu / Edit Board Dialog ────────────────────────────────────────
+  void _showBoardMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 3,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.edit_note_rounded, color: NGColors.gold),
+              title: const Text('Update Board Description', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showEditBoardDialog(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.refresh_rounded, color: Colors.white70),
+              title: const Text('Refresh Board Details', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.read<BoardViewModel>().fetchBoardDetails(widget.boardModel.id);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditBoardDialog(BuildContext context) {
+    final descCtrl = TextEditingController(text: widget.boardModel.description ?? '');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1C1C1C),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('Update Description', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: descCtrl,
+          maxLines: 3,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: 'Enter new description...',
+            hintStyle: TextStyle(color: Colors.white38),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: NGColors.gold, foregroundColor: Colors.black),
+            onPressed: () async {
+              final newDesc = descCtrl.text.trim();
+              Navigator.pop(ctx);
+              final ok = await context
+                  .read<BoardViewModel>()
+                  .updateBoard(boardId: widget.boardModel.id, description: newDesc);
+              if (ok && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Board updated successfully!'),
+                    backgroundColor: NGColors.emerald,
+                  ),
+                );
+              }
+            },
+            child: const Text('SAVE', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Add Task Dialog ───────────────────────────────────────────────────────
+  void _showAddTaskDialog(BuildContext context, String listName) {
+    final titleCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final tagCtrl = TextEditingController(text: 'Design');
+    final checkCtrl = TextEditingController();
+    DateTime dueDate = DateTime.now().add(const Duration(days: 7));
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF1C1C1C),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: Row(
+            children: [
+              const Icon(Icons.add_task_rounded, color: NGColors.gold),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Add Task to "$listName"',
+                  style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleCtrl,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'Task Title',
+                    labelStyle: TextStyle(color: Colors.white60),
+                    hintText: 'e.g. Approve 22K Kundan sample',
+                    hintStyle: TextStyle(color: Colors.white24),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descCtrl,
+                  style: const TextStyle(color: Colors.white),
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
+                    labelStyle: TextStyle(color: Colors.white60),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: tagCtrl,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'Tag (e.g. Design, Procurement)',
+                    labelStyle: TextStyle(color: Colors.white60),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: checkCtrl,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'Checklist Items (comma separated)',
+                    labelStyle: TextStyle(color: Colors.white60),
+                    hintText: 'Sketch approval, CAD model',
+                    hintStyle: TextStyle(color: Colors.white24),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: NGColors.gold, foregroundColor: Colors.black),
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final title = titleCtrl.text.trim();
+                      if (title.isEmpty) return;
+                      setDialogState(() => isSubmitting = true);
+
+                      final dueStr =
+                          '${dueDate.year}-${dueDate.month.toString().padLeft(2, '0')}-${dueDate.day.toString().padLeft(2, '0')} 12:00:00';
+
+                      final taskVm = context.read<TaskViewModel>();
+                      final newTask = await taskVm.createTask(
+                        boardId: widget.boardModel.id,
+                        listName: listName,
+                        name: title,
+                        description: descCtrl.text.trim(),
+                        tag: tagCtrl.text.trim(),
+                        dueDate: dueStr,
+                        checklist: checkCtrl.text.trim(),
+                      );
+
+                      if (!mounted) return;
+                      Navigator.pop(ctx);
+
+                      if (newTask != null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Task created via API!'),
+                            backgroundColor: NGColors.emerald,
+                          ),
+                        );
+                        context.read<BoardViewModel>().fetchBoardDetails(widget.boardModel.id);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(taskVm.errorMessage ?? 'Failed to create task'),
+                            backgroundColor: Colors.redAccent,
+                          ),
+                        );
+                      }
+                    },
+              child: isSubmitting
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                  : const Text('ADD TASK', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Open Task Detail Sheet ────────────────────────────────────────────────
+  void _openCardDetail(TaskModel task, String listName) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => CardDetailSheet(
+        task: task,
+        listName: listName,
+        boardId: widget.boardModel.id,
+        boardColor: _resolveColor(),
+      ),
+    ).then((_) {
+      if (mounted) {
+        context.read<BoardViewModel>().fetchBoardDetails(widget.boardModel.id);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final boardVm = context.watch<BoardViewModel>();
+    final taskVm = context.watch<TaskViewModel>();
+    final boardColor = _resolveColor();
+
+    // Board details from API or initial model
+    final activeBoard = boardVm.currentBoard ?? widget.boardModel;
+
+    // Use nested lists if available, or create standard Kanban columns
+    final List<BoardListModel> columns = activeBoard.lists != null && activeBoard.lists!.isNotEmpty
+        ? activeBoard.lists!
+        : [
+            const BoardListModel(id: 1, name: 'To Do', tasks: []),
+            const BoardListModel(id: 2, name: 'In Progress', tasks: []),
+            const BoardListModel(id: 3, name: 'Done', tasks: []),
+          ];
+
+    final totalTasks = columns.fold<int>(0, (s, l) => s + l.tasks.length);
+
     return Scaffold(
       backgroundColor: NGColors.obsidian,
       appBar: AppBar(
@@ -34,15 +377,14 @@ class _BoardScreenState extends State<BoardScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new,
-              size: 18, color: Colors.white70),
+          icon: const Icon(Icons.arrow_back_ios_new, size: 18, color: Colors.white70),
           onPressed: () => Navigator.pop(context),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              board.title,
+              activeBoard.name,
               style: const TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 16,
@@ -51,11 +393,12 @@ class _BoardScreenState extends State<BoardScreen> {
               ),
             ),
             Text(
-              '${board.lists.length} lists · ${board.totalCards} tasks',
+              '${columns.length} columns · $totalTasks tasks',
               style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.white.withOpacity(0.4),
-                  letterSpacing: 0.3),
+                fontSize: 11,
+                color: Colors.white.withValues(alpha: 0.4),
+                letterSpacing: 0.3,
+              ),
             ),
           ],
         ),
@@ -65,18 +408,25 @@ class _BoardScreenState extends State<BoardScreen> {
             height: 3,
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [board.color, board.color.withOpacity(0.2)],
+                colors: [boardColor, boardColor.withValues(alpha: 0.2)],
               ),
             ),
           ),
         ),
         actions: [
-          _AppBarAction(
-              icon: Icons.filter_list_rounded, onTap: () {}),
-          _AppBarAction(
-              icon: Icons.more_vert,
-              onTap: () => _showBoardMenu(context)),
-          const SizedBox(width: 8),
+          IconButton(
+            icon: Icon(
+              Icons.filter_list_rounded,
+              color: boardVm.activeTagFilter != null ? NGColors.gold : Colors.white70,
+              size: 20,
+            ),
+            onPressed: () => _showTagFilterDialog(context),
+          ),
+          IconButton(
+            icon: const Icon(Icons.more_vert, color: Colors.white70, size: 20),
+            onPressed: () => _showBoardMenu(context),
+          ),
+          const SizedBox(width: 4),
         ],
       ),
       body: Container(
@@ -85,962 +435,347 @@ class _BoardScreenState extends State<BoardScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              board.color.withOpacity(0.05),
+              boardColor.withValues(alpha: 0.05),
               NGColors.obsidian,
             ],
           ),
         ),
-        child: ListenableBuilder(
-          listenable: state,
-          builder: (context, _) {
-            return ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
-              itemCount: board.lists.length + 1,
-              itemBuilder: (context, i) {
-                if (i == board.lists.length) {
-                  return _AddListColumn(
-                    boardColor: board.color,
-                    onAdd: (title) {
-                      state.addList(board.id,
-                          KanbanList(id: _uid(), title: title));
-                    },
-                  );
-                }
-                final list = board.lists[i];
-                return KanbanListColumn(
-                  key: ValueKey(list.id),
-                  list: list,
-                  board: board,
-                  state: state,
-                  onAddCard: (title) => state.addCard(
-                      board.id, list.id, KanbanCard(id: _uid(), title: title)),
-                  onDeleteList: () => state.deleteList(board.id, list.id),
-                  onCardDropped: (card, fromListId) => state.moveCard(
-                    boardId: board.id,
-                    fromListId: fromListId,
-                    toListId: list.id,
-                    card: card,
-                  ),
-                  onCardTap: (card) => _openCardDetail(context, list, card),
-                );
-              },
-            );
-          },
-        ),
-      ),
-    );
-  }
+        child: boardVm.isDetailLoading
+            ? const Center(child: CircularProgressIndicator(color: NGColors.gold))
+            : ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
+                itemCount: columns.length,
+                itemBuilder: (context, i) {
+                  final column = columns[i];
 
-  void _openCardDetail(
-      BuildContext context, KanbanList list, KanbanCard card) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => CardDetailSheet(
-          card: card, list: list, board: board, state: state),
-    );
-  }
+                  return Container(
+                    width: 280,
+                    margin: const EdgeInsets.only(right: 14),
+                    child: DragTarget<TaskModel>(
+                      onWillAcceptWithDetails: (details) => true,
+                      onAcceptWithDetails: (details) async {
+                        final droppedTask = details.data;
+                        // Drag & Drop: Move task between columns via API
+                        final ok = await taskVm.updateTask(
+                          taskId: droppedTask.id,
+                          listName: column.name,
+                          dueDate: droppedTask.dueDate ?? '',
+                        );
+                        if (ok && mounted) {
+                          context.read<BoardViewModel>().fetchBoardDetails(widget.boardModel.id);
+                        }
+                      },
+                      builder: (context, candidateData, rejectedData) {
+                        final isHighlighted = candidateData.isNotEmpty;
 
-  void _showBoardMenu(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1A1A1A),
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 3,
-              decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(2)),
-            ),
-            const SizedBox(height: 20),
-            _DarkMenuTile(
-              icon: Icons.delete_outline,
-              label: 'Delete Board',
-              color: Colors.red,
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pop(context);
-                state.deleteBoard(board.id);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AppBarAction extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  const _AppBarAction({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(right: 4),
-        padding: const EdgeInsets.all(7),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(8),
-          border:
-              Border.all(color: Colors.white.withOpacity(0.08), width: 1),
-        ),
-        child: Icon(icon, color: Colors.white.withOpacity(0.6), size: 18),
-      ),
-    );
-  }
-}
-
-class _DarkMenuTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color? color;
-  final VoidCallback onTap;
-  const _DarkMenuTile(
-      {required this.icon,
-      required this.label,
-      this.color,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final c = color ?? Colors.white70;
-    return ListTile(
-      leading: Icon(icon, color: c),
-      title: Text(label,
-          style:
-              TextStyle(color: c, fontWeight: FontWeight.w500, fontSize: 15)),
-      onTap: onTap,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    );
-  }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-//  KANBAN LIST COLUMN
-// ────────────────────────────────────────────────────────────────────────────
-class KanbanListColumn extends StatefulWidget {
-  final KanbanList list;
-  final KanbanBoard board;
-  final AppState state;
-  final Function(String) onAddCard;
-  final VoidCallback onDeleteList;
-  final Function(KanbanCard card, String fromListId) onCardDropped;
-  final Function(KanbanCard) onCardTap;
-
-  const KanbanListColumn({
-    super.key,
-    required this.list,
-    required this.board,
-    required this.state,
-    required this.onAddCard,
-    required this.onDeleteList,
-    required this.onCardDropped,
-    required this.onCardTap,
-  });
-
-  @override
-  State<KanbanListColumn> createState() => _KanbanListColumnState();
-}
-
-class _KanbanListColumnState extends State<KanbanListColumn> {
-  bool _isDragTarget = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final cards = widget.list.activeCards;
-
-    return DragTarget<Map<String, dynamic>>(
-      onWillAcceptWithDetails: (details) =>
-          details.data['fromListId'] != widget.list.id,
-      onAcceptWithDetails: (details) {
-        setState(() => _isDragTarget = false);
-        widget.onCardDropped(
-          details.data['card'] as KanbanCard,
-          details.data['fromListId'] as String,
-        );
-      },
-      onMove: (_) => setState(() => _isDragTarget = true),
-      onLeave: (_) => setState(() => _isDragTarget = false),
-      builder: (ctx, candidates, rejected) {
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 288,
-          margin: const EdgeInsets.only(right: 12),
-          decoration: BoxDecoration(
-            color: _isDragTarget
-                ? widget.board.color.withOpacity(0.06)
-                : const Color(0xFF141414),
-            borderRadius: BorderRadius.circular(18),
-            border: _isDragTarget
-                ? Border.all(color: widget.board.color, width: 1.5)
-                : Border.all(
-                    color: widget.board.color.withOpacity(0.15), width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.35),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _ColumnHeader(
-                list: widget.list,
-                board: widget.board,
-                cardCount: cards.length,
-                onDelete: () => _confirmDelete(context),
-                onRename: (newTitle) => widget.state
-                    .renameList(widget.board.id, widget.list.id, newTitle),
-              ),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.56,
-                ),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  itemCount: cards.length,
-                  itemBuilder: (ctx, i) => KanbanCardTile(
-                    key: ValueKey(cards[i].id),
-                    card: cards[i],
-                    listId: widget.list.id,
-                    boardColor: widget.board.color,
-                    onTap: () => widget.onCardTap(cards[i]),
-                  ),
-                ),
-              ),
-              _AddCardInline(
-                  onAdd: widget.onAddCard, boardColor: widget.board.color),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _confirmDelete(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Delete List?',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold)),
-              const SizedBox(height: 10),
-              Text(
-                'Remove "${widget.list.title}" and all its cards?',
-                style: TextStyle(
-                    color: Colors.white.withOpacity(0.45), fontSize: 14),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text('Cancel',
-                          style: TextStyle(
-                              color: Colors.white.withOpacity(0.4)))),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      widget.onDeleteList();
-                    },
-                    child: const Text('Delete',
-                        style: TextStyle(
-                            color: Colors.red, fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-//  COLUMN HEADER
-// ────────────────────────────────────────────────────────────────────────────
-class _ColumnHeader extends StatefulWidget {
-  final KanbanList list;
-  final KanbanBoard board;
-  final int cardCount;
-  final VoidCallback onDelete;
-  final Function(String) onRename;
-
-  const _ColumnHeader({
-    required this.list,
-    required this.board,
-    required this.cardCount,
-    required this.onDelete,
-    required this.onRename,
-  });
-
-  @override
-  State<_ColumnHeader> createState() => _ColumnHeaderState();
-}
-
-class _ColumnHeaderState extends State<_ColumnHeader> {
-  bool _renaming = false;
-  late final TextEditingController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = TextEditingController(text: widget.list.title);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(18),
-          topRight: Radius.circular(18),
-        ),
-        border: Border(
-          bottom:
-              BorderSide(color: widget.board.color.withOpacity(0.15), width: 1),
-        ),
-      ),
-      child: Row(
-        children: [
-          // Left accent line
-          Container(
-            width: 3,
-            height: 18,
-            margin: const EdgeInsets.only(right: 10),
-            decoration: BoxDecoration(
-              color: widget.board.color,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Expanded(
-            child: _renaming
-                ? TextField(
-                    controller: _ctrl,
-                    autofocus: true,
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: widget.board.color),
-                    cursorColor: widget.board.color,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                          vertical: 6, horizontal: 8),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide:
-                              BorderSide(color: widget.board.color)),
-                      focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(
-                              color: widget.board.color, width: 1.5)),
-                      filled: true,
-                      fillColor: const Color(0xFF1E1E1E),
-                    ),
-                    onSubmitted: (v) {
-                      if (v.trim().isNotEmpty) widget.onRename(v.trim());
-                      setState(() => _renaming = false);
-                    },
-                  )
-                : GestureDetector(
-                    onDoubleTap: () => setState(() => _renaming = true),
-                    child: Row(
-                      children: [
-                        Text(
-                          widget.list.title,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                              color: Colors.white,
-                              letterSpacing: 0.3),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 2),
+                        return Container(
                           decoration: BoxDecoration(
-                            color: widget.board.color.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(12),
+                            color: const Color(0xFF141414),
+                            borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                                color: widget.board.color.withOpacity(0.3),
-                                width: 1),
+                              color: isHighlighted
+                                  ? NGColors.gold
+                                  : Colors.white.withValues(alpha: 0.08),
+                              width: isHighlighted ? 1.5 : 1.0,
+                            ),
                           ),
-                          child: Text(
-                            '${widget.cardCount}',
-                            style: TextStyle(
-                                color: widget.board.color,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Column Header
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: BoxDecoration(
+                                        color: boardColor,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        column.name,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.06),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        '${column.tasks.length}',
+                                        style: const TextStyle(
+                                          color: Colors.white60,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              const Divider(color: Colors.white10, height: 1),
+
+                              // Column Task Cards
+                              Expanded(
+                                child: column.tasks.isEmpty
+                                    ? Center(
+                                        child: Text(
+                                          'No tasks here yet\nDrag a card or click + to add',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            color: Colors.white.withValues(alpha: 0.25),
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      )
+                                    : ListView.builder(
+                                        padding: const EdgeInsets.all(10),
+                                        itemCount: column.tasks.length,
+                                        itemBuilder: (context, taskIndex) {
+                                          final task = column.tasks[taskIndex];
+                                          return LongPressDraggable<TaskModel>(
+                                            data: task,
+                                            feedback: Material(
+                                              color: Colors.transparent,
+                                              child: SizedBox(
+                                                width: 260,
+                                                child: _TaskCardView(
+                                                  task: task,
+                                                  boardColor: boardColor,
+                                                  isDragging: true,
+                                                ),
+                                              ),
+                                            ),
+                                            childWhenDragging: Opacity(
+                                              opacity: 0.3,
+                                              child: _TaskCardView(
+                                                task: task,
+                                                boardColor: boardColor,
+                                              ),
+                                            ),
+                                            child: GestureDetector(
+                                              onTap: () => _openCardDetail(task, column.name),
+                                              child: _TaskCardView(
+                                                task: task,
+                                                boardColor: boardColor,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                              ),
+
+                              // Add Task button
+                              Padding(
+                                padding: const EdgeInsets.all(10),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  height: 38,
+                                  child: TextButton.icon(
+                                    style: TextButton.styleFrom(
+                                      backgroundColor: Colors.white.withValues(alpha: 0.04),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.add, color: NGColors.gold, size: 16),
+                                    label: const Text(
+                                      'Add Task',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    onPressed: () => _showAddTaskDialog(context, column.name),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
-                  ),
-          ),
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert,
-                size: 16, color: Colors.white.withOpacity(0.35)),
-            color: const Color(0xFF222222),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                    color: Colors.white.withOpacity(0.08), width: 1)),
-            onSelected: (v) {
-              if (v == 'rename') setState(() => _renaming = true);
-              if (v == 'delete') widget.onDelete();
-            },
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                  value: 'rename',
-                  child: Row(children: [
-                    Icon(Icons.edit_outlined,
-                        size: 15, color: Colors.white.withOpacity(0.7)),
-                    const SizedBox(width: 8),
-                    Text('Rename',
-                        style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
-                            fontSize: 13))
-                  ])),
-              PopupMenuItem(
-                  value: 'delete',
-                  child: Row(children: [
-                    const Icon(Icons.delete_outline,
-                        size: 15, color: Colors.red),
-                    const SizedBox(width: 8),
-                    const Text('Delete',
-                        style:
-                            TextStyle(color: Colors.red, fontSize: 13))
-                  ])),
-            ],
-          ),
-        ],
+                  );
+                },
+              ),
       ),
     );
   }
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-//  KANBAN CARD TILE
+//  TASK CARD VIEW
 // ────────────────────────────────────────────────────────────────────────────
-class KanbanCardTile extends StatelessWidget {
-  final KanbanCard card;
-  final String listId;
+class _TaskCardView extends StatelessWidget {
+  final TaskModel task;
   final Color boardColor;
-  final VoidCallback onTap;
+  final bool isDragging;
 
-  const KanbanCardTile({
-    super.key,
-    required this.card,
-    required this.listId,
+  const _TaskCardView({
+    required this.task,
     required this.boardColor,
-    required this.onTap,
+    this.isDragging = false,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    return Draggable<Map<String, dynamic>>(
-      data: {'card': card, 'fromListId': listId},
-      feedback: Material(
-        color: Colors.transparent,
-        child: SizedBox(width: 268, child: _CardBody(card: card)),
-      ),
-      childWhenDragging:
-          Opacity(opacity: 0.2, child: _CardBody(card: card)),
-      child: GestureDetector(onTap: onTap, child: _CardBody(card: card)),
-    );
+  Color _resolveTagColor(String? tag, String? hexColor) {
+    if (hexColor != null && hexColor.isNotEmpty) {
+      try {
+        final hex = hexColor.replaceAll('#', '');
+        return Color(int.parse('FF$hex', radix: 16));
+      } catch (_) {}
+    }
+    switch (tag?.toLowerCase()) {
+      case 'design':
+        return NGColors.gold;
+      case 'marketing':
+        return NGColors.rose;
+      case 'procurement':
+        return NGColors.sapphire;
+      case 'compliance':
+        return NGColors.ruby;
+      case 'complete':
+        return NGColors.emerald;
+      default:
+        return const Color(0xFF6B46C1);
+    }
   }
-}
-
-class _CardBody extends StatelessWidget {
-  final KanbanCard card;
-  const _CardBody({required this.card});
 
   @override
   Widget build(BuildContext context) {
-    final hasLabel = card.labelColor != Colors.transparent;
-    final hasDue = card.dueDate != null;
-    final hasChecklist = card.checklist.isNotEmpty;
-    final isOverdue = hasDue && card.dueDate!.isBefore(DateTime.now());
+    final tagColor = _resolveTagColor(task.tag, task.tagColor);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: hasLabel
-              ? card.labelColor.withOpacity(0.2)
-              : Colors.white.withOpacity(0.06),
+          color: isDragging
+              ? NGColors.gold
+              : Colors.white.withValues(alpha: 0.06),
           width: 1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.35),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        boxShadow: isDragging
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
+                ),
+              ]
+            : [],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Label bar
-          if (hasLabel)
+          if (task.tag != null && task.tag!.isNotEmpty) ...[
             Container(
-              height: 3,
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
               decoration: BoxDecoration(
-                color: card.labelColor,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(14),
-                  topRight: Radius.circular(14),
+                color: tagColor.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: tagColor.withValues(alpha: 0.4), width: 0.8),
+              ),
+              child: Text(
+                task.tag!,
+                style: TextStyle(
+                  color: tagColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.3,
                 ),
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Label badge
-                if (card.labelText.isNotEmpty) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: card.labelColor.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: card.labelColor.withOpacity(0.25),
-                          width: 1),
-                    ),
-                    child: Text(
-                      card.labelText,
-                      style: TextStyle(
-                        color: card.labelColor,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 7),
-                ],
-
-                // Title
-                Text(
-                  card.title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                    color: Colors.white,
-                    height: 1.35,
-                  ),
-                ),
-
-                // Description
-                if (card.description.isNotEmpty) ...[
-                  const SizedBox(height: 5),
-                  Text(
-                    card.description,
-                    style: TextStyle(
-                        color: Colors.white.withOpacity(0.35),
-                        fontSize: 11.5),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-
-                // Meta row
-                if (hasDue || hasChecklist) ...[
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: [
-                      if (hasDue)
-                        _MetaBadge(
-                          icon: Icons.access_time_rounded,
-                          label: _fmtDate(card.dueDate!),
-                          color: isOverdue ? Colors.red : NGColors.champagne,
-                          bg: isOverdue
-                              ? Colors.red.withOpacity(0.1)
-                              : NGColors.gold.withOpacity(0.08),
-                          border: isOverdue
-                              ? Colors.red.withOpacity(0.3)
-                              : NGColors.gold.withOpacity(0.2),
-                        ),
-                      if (hasChecklist)
-                        _MetaBadge(
-                          icon: Icons.checklist_rounded,
-                          label:
-                              '${card.checklistDone}/${card.checklistTotal}',
-                          color: card.checklistDone == card.checklistTotal
-                              ? Colors.green
-                              : Colors.white.withOpacity(0.5),
-                          bg: card.checklistDone == card.checklistTotal
-                              ? Colors.green.withOpacity(0.08)
-                              : Colors.white.withOpacity(0.05),
-                          border: card.checklistDone == card.checklistTotal
-                              ? Colors.green.withOpacity(0.3)
-                              : Colors.white.withOpacity(0.1),
-                        ),
-                    ],
-                  ),
-                ],
-              ],
+            const SizedBox(height: 6),
+          ],
+          Text(
+            task.name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  String _fmtDate(DateTime d) {
-    const m = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${m[d.month - 1]} ${d.day}';
-  }
-}
-
-class _MetaBadge extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final Color bg;
-  final Color border;
-
-  const _MetaBadge(
-      {required this.icon,
-      required this.label,
-      required this.color,
-      required this.bg,
-      required this.border});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: border, width: 1)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 10, color: color),
-          const SizedBox(width: 3),
-          Text(label,
+          if (task.description != null && task.description!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              task.description!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                  fontSize: 10,
-                  color: color,
-                  fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-//  ADD CARD INLINE
-// ────────────────────────────────────────────────────────────────────────────
-class _AddCardInline extends StatefulWidget {
-  final Function(String) onAdd;
-  final Color boardColor;
-  const _AddCardInline({required this.onAdd, required this.boardColor});
-
-  @override
-  State<_AddCardInline> createState() => _AddCardInlineState();
-}
-
-class _AddCardInlineState extends State<_AddCardInline> {
-  bool _expanded = false;
-  final _ctrl = TextEditingController();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-      child: _expanded
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1C1C1C),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                        color: widget.boardColor.withOpacity(0.3), width: 1),
-                  ),
-                  child: TextField(
-                    controller: _ctrl,
-                    autofocus: true,
-                    maxLines: 2,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                    cursorColor: widget.boardColor,
-                    decoration: InputDecoration(
-                      hintText: 'Task title...',
-                      hintStyle: TextStyle(
-                          color: Colors.white.withOpacity(0.25), fontSize: 13),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.all(10),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
+                color: Colors.white.withValues(alpha: 0.45),
+                fontSize: 11,
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              if (task.dueDate != null && task.dueDate!.isNotEmpty)
                 Row(
                   children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          if (_ctrl.text.trim().isNotEmpty) {
-                            widget.onAdd(_ctrl.text.trim());
-                            _ctrl.clear();
-                            setState(() => _expanded = false);
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 9),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [widget.boardColor, widget.boardColor.withOpacity(0.7)],
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Center(
-                            child: Text('Add Task',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 13)),
-                          ),
-                        ),
-                      ),
+                    Icon(
+                      Icons.schedule_rounded,
+                      size: 12,
+                      color: Colors.white.withValues(alpha: 0.4),
                     ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () {
-                        _ctrl.clear();
-                        setState(() => _expanded = false);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.06),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                              color: Colors.white.withOpacity(0.1), width: 1),
-                        ),
-                        child: Icon(Icons.close,
-                            size: 16,
-                            color: Colors.white.withOpacity(0.4)),
+                    const SizedBox(width: 4),
+                    Text(
+                      task.dueDate!.split(' ').first,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 10,
                       ),
                     ),
                   ],
-                ),
-              ],
-            )
-          : TextButton.icon(
-              onPressed: () => setState(() => _expanded = true),
-              icon: Icon(Icons.add_rounded,
-                  size: 16, color: Colors.white.withOpacity(0.3)),
-              label: Text('Add a task',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withOpacity(0.3),
-                      letterSpacing: 0.3)),
-              style: TextButton.styleFrom(
-                minimumSize: const Size.fromHeight(36),
-              ),
-            ),
-    );
-  }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-//  ADD LIST COLUMN
-// ────────────────────────────────────────────────────────────────────────────
-class _AddListColumn extends StatefulWidget {
-  final Function(String) onAdd;
-  final Color boardColor;
-  const _AddListColumn({required this.onAdd, required this.boardColor});
-
-  @override
-  State<_AddListColumn> createState() => _AddListColumnState();
-}
-
-class _AddListColumnState extends State<_AddListColumn> {
-  bool _expanded = false;
-  final _ctrl = TextEditingController();
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_expanded) {
-      return GestureDetector(
-        onTap: () => setState(() => _expanded = true),
-        child: Container(
-          width: 250,
-          height: 52,
-          margin: const EdgeInsets.only(right: 16),
-          decoration: BoxDecoration(
-            color: const Color(0xFF141414),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-                color: widget.boardColor.withOpacity(0.25), width: 1),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.add_rounded,
-                  color: widget.boardColor.withOpacity(0.6), size: 18),
-              const SizedBox(width: 8),
-              Text('Add list',
-                  style: TextStyle(
-                      color: widget.boardColor.withOpacity(0.6),
-                      fontWeight: FontWeight.w500,
-                      fontSize: 13)),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      width: 250,
-      margin: const EdgeInsets.only(right: 16),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF141414),
-        borderRadius: BorderRadius.circular(16),
-        border:
-            Border.all(color: widget.boardColor.withOpacity(0.3), width: 1),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.35), blurRadius: 12)
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF1C1C1C),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                  color: widget.boardColor.withOpacity(0.25), width: 1),
-            ),
-            child: TextField(
-              controller: _ctrl,
-              autofocus: true,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              cursorColor: widget.boardColor,
-              decoration: InputDecoration(
-                hintText: 'List name...',
-                hintStyle: TextStyle(
-                    color: Colors.white.withOpacity(0.25), fontSize: 13),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 10),
-              ),
-              onSubmitted: (_) => _submit(),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: _submit,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 9),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          widget.boardColor,
-                          widget.boardColor.withOpacity(0.7)
-                        ],
+                )
+              else
+                const SizedBox.shrink(),
+              if (task.assignees != null && task.assignees!.isNotEmpty)
+                Row(
+                  children: task.assignees!.take(2).map((a) {
+                    final letter = a.name.isNotEmpty ? a.name[0].toUpperCase() : 'U';
+                    return Container(
+                      margin: const EdgeInsets.only(left: 4),
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: NGColors.gold.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: NGColors.gold.withValues(alpha: 0.5), width: 1),
                       ),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Center(
-                      child: Text('Add List',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13)),
-                    ),
-                  ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        letter,
+                        style: const TextStyle(
+                          color: NGColors.gold,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () {
-                  _ctrl.clear();
-                  setState(() => _expanded = false);
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.06),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(Icons.close,
-                      color: Colors.white.withOpacity(0.4), size: 16),
-                ),
-              ),
             ],
           ),
         ],
       ),
     );
-  }
-
-  void _submit() {
-    if (_ctrl.text.trim().isNotEmpty) {
-      widget.onAdd(_ctrl.text.trim());
-      _ctrl.clear();
-      setState(() => _expanded = false);
-    }
   }
 }

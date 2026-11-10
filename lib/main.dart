@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+
 import 'app_state.dart';
-import 'app_state.dart' show NGColors;
 import 'login_screen.dart';
+import 'services/services.dart';
+import 'viewmodels/viewmodels.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,31 +15,55 @@ void main() {
     systemNavigationBarColor: Color(0xFF0A0A0A),
     systemNavigationBarIconBrightness: Brightness.light,
   ));
-  runApp(const NakshatraApp());
+
+  // Initialize Core API Services
+  final apiService = ApiService();
+  final taskManagerApi = TaskManagerApiService(apiService: apiService);
+
+  runApp(
+    MultiProvider(
+      providers: [
+        // ─── Network & API Services ──────────────────────────────────────────
+        Provider<ApiService>.value(value: apiService),
+        Provider<TaskManagerApiService>.value(value: taskManagerApi),
+
+        // ─── ViewModels (ChangeNotifier) ─────────────────────────────────────
+        ChangeNotifierProvider<AuthViewModel>(
+          create: (_) => AuthViewModel(api: taskManagerApi),
+        ),
+        ChangeNotifierProvider<BoardViewModel>(
+          create: (_) => BoardViewModel(api: taskManagerApi),
+        ),
+        ChangeNotifierProvider<TaskViewModel>(
+          create: (_) => TaskViewModel(api: taskManagerApi),
+        ),
+        ChangeNotifierProvider<NotificationViewModel>(
+          create: (_) => NotificationViewModel(api: taskManagerApi),
+        ),
+
+        // ─── Legacy AppState (Maintains backwards UI compatibility) ──────────
+        ChangeNotifierProvider<AppState>(
+          create: (_) => AppState(),
+        ),
+      ],
+      child: const NakshatraApp(),
+    ),
+  );
 }
 
-class NakshatraApp extends StatefulWidget {
+class NakshatraApp extends StatelessWidget {
   const NakshatraApp({super.key});
 
   @override
-  State<NakshatraApp> createState() => _NakshatraAppState();
-}
-
-class _NakshatraAppState extends State<NakshatraApp> {
-  final AppState _state = AppState();
-
-  @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: _state,
-      builder: (context, _) {
-        return MaterialApp(
-          title: 'Nakshatra Gold & Diamonds',
-          debugShowCheckedModeBanner: false,
-          theme: _buildTheme(),
-          home: LoginScreen(state: _state),
-        );
-      },
+    // Both context.watch<AppState>() or context.watch<AuthViewModel>() can be consumed here
+    final appState = context.watch<AppState>();
+
+    return MaterialApp(
+      title: 'Nakshthra task',
+      debugShowCheckedModeBanner: false,
+      theme: _buildTheme(),
+      home: LoginScreen(state: appState),
     );
   }
 
@@ -48,13 +75,11 @@ class _NakshatraAppState extends State<NakshatraApp> {
         seedColor: NGColors.gold,
         brightness: Brightness.dark,
         surface: const Color(0xFF141414),
-        background: NGColors.obsidian,
       ).copyWith(
         primary: NGColors.gold,
         onPrimary: Colors.white,
         surface: const Color(0xFF141414),
         onSurface: Colors.white,
-        background: NGColors.obsidian,
       ),
       scaffoldBackgroundColor: NGColors.obsidian,
       appBarTheme: const AppBarTheme(
@@ -106,18 +131,16 @@ class _NakshatraAppState extends State<NakshatraApp> {
         filled: true,
       ),
       checkboxTheme: CheckboxThemeData(
-        fillColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return NGColors.gold;
           }
           return Colors.transparent;
         }),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
       ),
-      
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: Color(0xFF141414),
-        modalBackgroundColor: Color(0xFF141414),
         surfaceTintColor: Colors.transparent,
       ),
       popupMenuTheme: PopupMenuThemeData(

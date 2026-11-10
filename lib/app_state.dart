@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'models.dart';
 
 // Gold palette constants
@@ -20,261 +20,33 @@ class NGColors {
 class AppState extends ChangeNotifier {
   final List<KanbanBoard> boards;
 
-  AppState() : boards = _sampleBoards();
-
-  // ─── Sample Data ───────────────────────────────────────────────────────────
-  static List<KanbanBoard> _sampleBoards() {
-    return [
-      KanbanBoard(
-        id: '1',
-        title: 'Bridal Collection Launch',
-        color: NGColors.gold,
-        description: 'Q1 Bridal jewellery campaign',
-        lists: [
-          KanbanList(id: 'l1', title: 'Planning', cards: [
-            KanbanCard(
-              id: 'c1',
-              title: 'Necklace design finalisation',
-              description: 'Approve 22K gold Kundan necklace prototypes for bridal line',
-              labelColor: NGColors.gold,
-              labelText: 'Design',
-              dueDate: DateTime.now().add(const Duration(days: 7)),
-              checklist: [
-                ChecklistItem(id: 'ch1', title: 'Sketch approvals', isDone: true),
-                ChecklistItem(id: 'ch2', title: 'CAD modelling', isDone: false),
-                ChecklistItem(id: 'ch3', title: 'Sample casting', isDone: false),
-              ],
-            ),
-            KanbanCard(
-              id: 'c2',
-              title: 'Photography shoot schedule',
-              labelColor: NGColors.rose,
-              labelText: 'Marketing',
-              description: 'Book studio, models and photographer for bridal lookbook',
-            ),
-            KanbanCard(
-              id: 'c12',
-              title: 'Packaging design',
-              labelColor: NGColors.goldDark,
-              labelText: 'Branding',
-              description: 'Premium black and gold gift boxes with embossed logo',
-            ),
-          ]),
-          KanbanList(id: 'l2', title: 'In Progress', cards: [
-            KanbanCard(
-              id: 'c3',
-              title: 'Diamond sourcing — GIA certified',
-              labelColor: NGColors.sapphire,
-              labelText: 'Procurement',
-              description: 'Source VS1 round brilliant diamonds from Surat suppliers',
-              dueDate: DateTime.now().add(const Duration(days: 3)),
-              checklist: [
-                ChecklistItem(id: 'ch6', title: 'Vendor shortlist', isDone: true),
-                ChecklistItem(id: 'ch7', title: 'Sample inspection', isDone: true),
-                ChecklistItem(id: 'ch8', title: 'Purchase order', isDone: false),
-              ],
-            ),
-          ]),
-          KanbanList(id: 'l3', title: 'Quality Check', cards: [
-            KanbanCard(
-              id: 'c4',
-              title: 'Hallmarking compliance',
-              labelColor: NGColors.ruby,
-              labelText: 'Compliance',
-              description: 'Ensure BIS hallmarking on all 22K pieces',
-              dueDate: DateTime.now().subtract(const Duration(days: 1)),
-            ),
-          ]),
-          KanbanList(id: 'l4', title: 'Launched', cards: [
-            KanbanCard(
-              id: 'c5',
-              title: 'Solitaire ring collection',
-              labelColor: NGColors.emerald,
-              labelText: 'Complete',
-              checklist: [
-                ChecklistItem(id: 'ch4', title: 'Production complete', isDone: true),
-                ChecklistItem(id: 'ch5', title: 'Listed on website', isDone: true),
-              ],
-            ),
-            KanbanCard(
-              id: 'c13',
-              title: 'Nakshatra Classics relaunch',
-              labelColor: NGColors.goldDark,
-              labelText: 'Complete',
-            ),
-          ]),
-        ],
-      ),
-      KanbanBoard(
-        id: '2',
-        title: 'Digital Marketing',
-        color: NGColors.rose,
-        description: 'Online brand presence & campaigns',
-        lists: [
-          KanbanList(id: 'l5', title: 'Ideas', cards: [
-            KanbanCard(
-              id: 'c6',
-              title: 'Instagram Reels — making process',
-              labelColor: NGColors.rose,
-              labelText: 'Social Media',
-              description: 'Behind-the-scenes of master craftsmen at work',
-            ),
-            KanbanCard(
-              id: 'c14',
-              title: 'Celebrity endorsement pitch',
-              labelColor: NGColors.gold,
-              labelText: 'Partnership',
-            ),
-          ]),
-          KanbanList(id: 'l6', title: 'Scheduled', cards: [
-            KanbanCard(
-              id: 'c7',
-              title: 'Email campaign — Diwali collection',
-              labelColor: NGColors.sapphire,
-              labelText: 'Email',
-              dueDate: DateTime.now().add(const Duration(days: 14)),
-              checklist: [
-                ChecklistItem(id: 'ch9', title: 'Copy & design', isDone: false),
-                ChecklistItem(id: 'ch10', title: 'A/B subject test', isDone: false),
-              ],
-            ),
-          ]),
-          KanbanList(id: 'l7', title: 'In Progress', cards: [
-            KanbanCard(
-              id: 'c15',
-              title: 'Website homepage redesign',
-              labelColor: NGColors.goldDark,
-              labelText: 'Web',
-              dueDate: DateTime.now().add(const Duration(days: 5)),
-            ),
-          ]),
-          KanbanList(id: 'l11', title: 'Live', cards: [
-            KanbanCard(
-              id: 'c16',
-              title: 'Google Shopping ads — rings',
-              labelColor: NGColors.emerald,
-              labelText: 'Ads',
-            ),
-          ]),
-        ],
-      ),
-      KanbanBoard(
-        id: '3',
-        title: 'Store Operations',
-        color: NGColors.graphite,
-        description: 'Retail & inventory management',
-        lists: [
-          KanbanList(id: 'l8', title: 'To Do', cards: [
-            KanbanCard(
-              id: 'c8',
-              title: 'POS system upgrade',
-              labelColor: NGColors.gold,
-              labelText: 'Technology',
-              description: 'Integrate GST billing with new inventory software',
-            ),
-            KanbanCard(
-              id: 'c9',
-              title: 'Staff training — new collections',
-              labelColor: NGColors.sapphire,
-              labelText: 'Training',
-              description: 'Educate sales staff on diamond 4C grading',
-              checklist: [
-                ChecklistItem(id: 'ch11', title: 'Mumbai store', isDone: false),
-                ChecklistItem(id: 'ch12', title: 'Delhi store', isDone: false),
-                ChecklistItem(id: 'ch13', title: 'Bangalore store', isDone: false),
-              ],
-            ),
-          ]),
-          KanbanList(id: 'l9', title: 'In Progress', cards: [
-            KanbanCard(
-              id: 'c10',
-              title: 'Inventory audit — Q1',
-              labelColor: NGColors.ruby,
-              labelText: 'Operations',
-              description: 'Full stock count across all showrooms',
-              dueDate: DateTime.now().add(const Duration(days: 2)),
-            ),
-          ]),
-          KanbanList(id: 'l10', title: 'Done', cards: [
-            KanbanCard(
-              id: 'c11',
-              title: 'Security system upgrade',
-              labelColor: NGColors.emerald,
-              labelText: 'Complete',
-            ),
-            KanbanCard(
-              id: 'c17',
-              title: 'Display counter refurbishment',
-              labelColor: NGColors.goldDark,
-              labelText: 'Complete',
-            ),
-          ]),
-        ],
-      ),
-      KanbanBoard(
-        id: '4',
-        title: 'Design Studio',
-        color: Color(0xFF4A3728),
-        description: 'Custom & bespoke jewellery orders',
-        lists: [
-          KanbanList(id: 'l12', title: 'Consultation', cards: [
-            KanbanCard(
-              id: 'c18',
-              title: 'Mehta family — wedding set',
-              labelColor: NGColors.gold,
-              labelText: 'Bespoke',
-            ),
-            KanbanCard(
-              id: 'c19',
-              title: 'Anniversary pendant — client R.K.',
-              labelColor: NGColors.rose,
-              labelText: 'Custom',
-            ),
-          ]),
-          KanbanList(id: 'l13', title: 'Crafting', cards: [
-            KanbanCard(
-              id: 'c20',
-              title: 'Polki diamond choker — Mrs. Sharma',
-              labelColor: NGColors.sapphire,
-              labelText: 'In Workshop',
-              description: 'Hand-set uncut diamonds in 22K yellow gold',
-              checklist: [
-                ChecklistItem(id: 'ch14', title: 'Gold framework cast', isDone: true),
-                ChecklistItem(id: 'ch15', title: 'Stone setting', isDone: true),
-                ChecklistItem(id: 'ch16', title: 'Enamel work', isDone: false),
-                ChecklistItem(id: 'ch17', title: 'Final polishing', isDone: false),
-              ],
-            ),
-          ]),
-          KanbanList(id: 'l14', title: 'Approval', cards: []),
-          KanbanList(id: 'l15', title: 'Delivered', cards: [
-            KanbanCard(
-              id: 'c21',
-              title: 'Emerald cocktail ring — Dubai export',
-              labelColor: NGColors.emerald,
-              labelText: 'Delivered',
-            ),
-          ]),
-        ],
-      ),
-    ];
-  }
+  // Initialized empty with zero mock data. Real data is loaded via API ViewModels.
+  AppState() : boards = [];
 
   // ─── Board Operations ──────────────────────────────────────────────────────
 
+  void setBoards(List<KanbanBoard> newBoards) {
+    boards.clear();
+    boards.addAll(newBoards);
+    notifyListeners();
+  }
+
   void addBoard(KanbanBoard board) {
-    boards.add(board);
+    boards.insert(0, board);
     notifyListeners();
   }
 
-  void deleteBoard(String boardId) {
-    boards.removeWhere((b) => b.id == boardId);
+  void deleteBoard(String id) {
+    boards.removeWhere((b) => b.id == id);
     notifyListeners();
   }
 
-  void updateBoardTitle(String boardId, String title) {
-    final board = _findBoard(boardId);
-    board?.title = title;
+  void updateBoard(String id, {String? title, Color? color, String? description}) {
+    final b = _findBoard(id);
+    if (b == null) return;
+    if (title != null) b.title = title;
+    if (color != null) b.color = color;
+    if (description != null) b.description = description;
     notifyListeners();
   }
 
